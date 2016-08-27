@@ -230,10 +230,14 @@ class HoDSolve2016 extends MineFinder {
       }
 
       val solutions = {
+        // i am sure there is a way to do this better, but too much research is required
         val partial = areas
         val all = mutable.ArrayBuffer(areas.flatten.to[mutable.LinkedHashSet])
-        val allAreasWithComplete = areas.iterator ++ all.iterator
-        allAreasWithComplete.map(findSolutionForGivenLineOfPoints).filter(_.useful)
+        val preparedAreasToCheck = {
+          val chunked = (areas ++ all).flatMap(_.sliding(20, 15))
+          (chunked ++ areas ++ all).distinct.sortBy(_.size)
+        }
+        preparedAreasToCheck.iterator.map(findSolutionForGivenLineOfPoints).filter(_.useful)
       }
 
       if (solutions.isEmpty) {
