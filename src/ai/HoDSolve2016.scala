@@ -42,9 +42,9 @@ class HoDSolve2016 extends MineFinder {
         myField.informSafe(p, bombCount)
         change = true
         if (bombCount == 0) {
-          safeTodo ++= myField.around(p, withHidden = true).map(_.copy)
+          safeTodo ++= myField.around(p, withHidden = true, mutablePoints = false)
         } else {
-          unsafeTodo ++= myField.around(p, withHidden = true).map(_.copy)
+          unsafeTodo ++= myField.around(p, withHidden = true, mutablePoints = false)
         }
       }
 
@@ -61,7 +61,7 @@ class HoDSolve2016 extends MineFinder {
             openField(next)
           } else if (myField.mustBeBomb(next)) {
             flagAsBomb(next)
-            unsafeTodo ++= myField.around(next, withHidden = true).map(_.copy)
+            unsafeTodo ++= myField.around(next, withHidden = true, mutablePoints = false)
           } else {
             expensiveTodo += next
           }
@@ -100,7 +100,7 @@ class HoDSolve2016 extends MineFinder {
 
   case class FieldData(width:Int, height:Int, bombs:Int, start:Point) {
     def nextToOpen(p: Point) = {
-      around(p, withOpen = true).nonEmpty
+      around(p, withOpen = true, mutablePoints = true).nonEmpty
     }
 
     def allClosedFields = new Traversable[Point] {
@@ -120,7 +120,7 @@ class HoDSolve2016 extends MineFinder {
     @inline def isOpen(where:Point) = bombCounts.at(where) != UNKNOWN_STATE
 
     @inline def mustBeSafe(where: Point) = {
-      around(where, withOpen = true).exists { box =>
+      around(where, withOpen = true, mutablePoints = true).exists { box =>
         remainingSurroundingBombs.at(box) == 0 && isOpen(box)
       }
     }
@@ -149,8 +149,8 @@ class HoDSolve2016 extends MineFinder {
     @inline def mustBeSafe2(where: Point) = {
       @inline def contradiction(p:Point) = {
         val reference = remainingSurroundingBombs.at(p)
-        def possible = around(p, withHidden = true).count { canIBeABomb =>
-          !around(canIBeABomb, withOpen = true).exists { checkIfIAmZero =>
+        def possible = around(p, withHidden = true, mutablePoints = true).count { canIBeABomb =>
+          !around(canIBeABomb, withOpen = true, mutablePoints = true).exists { checkIfIAmZero =>
             remainingSurroundingBombs.at(checkIfIAmZero) == 0
           }
         }
@@ -185,8 +185,8 @@ class HoDSolve2016 extends MineFinder {
 
     @inline def mustBeBomb(where:Point) = {
       pretendSafe(where)
-      val bomb = around(where, withOpen = true).exists { box =>
-        val possibleRemainingBombs = around(box, withHidden = true).size
+      val bomb = around(where, withOpen = true, mutablePoints = true).exists { box =>
+        val possibleRemainingBombs = around(box, withHidden = true, mutablePoints = true).size
         possibleRemainingBombs < remainingSurroundingBombs.at(box)
       }
       unpretendSafe(where)
@@ -201,10 +201,11 @@ class HoDSolve2016 extends MineFinder {
       bombCounts(where.x)(where.y) = UNKNOWN_STATE
     }
 
-    @inline def allAround(where:Point) = around(where, withHidden = true, withOpen = true)
+    @inline def allAround(where: Point) = around(where, withHidden = true, withOpen = true, mutablePoints = true)
 
     @inline def informBomb(where: Point): Unit = {
       remainingBombs -= 1
+      unknown -= 1
       allAround(where).foreach { p =>
         remainingSurroundingBombs(p.x)(p.y) -= 1
       }
@@ -228,10 +229,10 @@ class HoDSolve2016 extends MineFinder {
       unknown -= 1
     }
 
-
-    @inline def around(p:Point, withHidden:Boolean = false, withOpen: Boolean = false): Traversable[Point] = {
+    @inline def around(p: Point, withHidden: Boolean = false, withOpen: Boolean = false,
+                       mutablePoints: Boolean): Traversable[Point] = {
       val withAll = withHidden && withOpen
-      new Traversable[Point] {
+      val t: Traversable[Point] = new Traversable[Point] {
 
         @inline def isInBoundsUnknown(p:Point) = inBounds(p) && isUnknown(p)
 
@@ -256,16 +257,38 @@ class HoDSolve2016 extends MineFinder {
         @inline def bottom = !notBottom
 
         @inline def checked[U](f:Point => U) = {
-          all(f, if (withAll) inBounds else if (withHidden) isInBoundsUnknown else isInBoundsKnown)
+          allWithTest(f, if (withAll) inBounds else if (withHidden) isInBoundsUnknown else isInBoundsKnown)
         }
 
         @inline def unchecked[U](f:Point => U) = {
-          all(f, if (withAll) (_: Point) => true else if (withHidden) isUnknown else isKnown)
+          if (withAll) {
+            all(f)
+          } else {
+            allWithTest(f, if (withHidden) isUnknown else isKnown)
+          }
         }
 
+        @inline def all[U](f: (Point) => U) = {
+          val mut = new Point(p.x - 1, p.y - 1)
+          f(mut)
+          mut.x += 1
+          f(mut)
+          mut.x += 1
+          f(mut)
+          mut.y += 1
+          f(mut)
+          mut.y += 1
+          f(mut)
+          mut.x -= 1
+          f(mut)
+          mut.x -= 1
+          f(mut)
+          mut.y -= 1
+          f(mut)
+        }
 
-        @inline def all[U](f: (Point) => U, @inline test:Point => Boolean) = {
-          val mut = new Point(p.x-1, p.y-1)
+        @inline def allWithTest[U](f: (Point) => U, @inline test: Point => Boolean) = {
+          val mut = new Point(p.x - 1, p.y - 1)
           if (test(mut)) f(mut)
           mut.x +=1
           if (test(mut)) f(mut)
@@ -291,6 +314,8 @@ class HoDSolve2016 extends MineFinder {
           }
         }
       }
+
+      if (mutablePoints) t else t.map(_.copy)
     }
 
     private val bombCounts = Array.tabulate(width, height)((_,_) => UNKNOWN_STATE)
@@ -301,6 +326,7 @@ class HoDSolve2016 extends MineFinder {
 }
 
 object Utils {
+
   implicit class PointOps(val p:Point) extends AnyVal {
     def copy = p.clone().asInstanceOf[Point]
   }
@@ -308,6 +334,7 @@ object Utils {
   implicit class ArrayArrayOps[T](val a:Array[Array[T]]) extends AnyVal {
     def at(p:Point) = a(p.x)(p.y)
   }
+
 }
 
 
