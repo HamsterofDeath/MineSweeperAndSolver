@@ -5,7 +5,6 @@ import java.awt.Point
 import Sweeper.{MineField, MineFieldFlag, MineFinder}
 
 import scala.collection.mutable
-import scala.collection.mutable.ArrayBuffer
 
 /**
   * Created by HamsterofDeath on 8/22/2016.
@@ -565,7 +564,7 @@ class HoDSolve2016 extends MineFinder {
 
       if (mutablePoints) t
       else {
-        val store = new ArrayBuffer[Point](8)
+        val store = new mutable.ArrayBuffer[Point](8)
         t.foreach { p =>
           store += p.copy
         }
