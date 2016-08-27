@@ -37,9 +37,10 @@ class HoDSolve2016 extends MineFinder {
     var resortedToBruteForce     = 0
     var bruteForceSuccess        = 0
     var bruteForceFailure        = 0
+    var bruteForcedSolutions     = 0
 
     override def toString =
-      s"""bombs:                         $bombs,
+      s"""|bombs:                        $bombs,
           |safeTotal:                    $safeTotal,
           |putInSafeList:                $putInSafeList,
           |duplicatedInSafeList:         $duplicatedInSafeList,
@@ -51,6 +52,7 @@ class HoDSolve2016 extends MineFinder {
           |resortedToBruteForce:         $resortedToBruteForce,
           |bruteForceFailure:            $bruteForceFailure,
           |bruteForceSuccess:            $bruteForceSuccess,
+          |bruteForcedSolutions:         $bruteForcedSolutions,
           |""".stripMargin
   }
 
@@ -179,7 +181,7 @@ class HoDSolve2016 extends MineFinder {
         def useful = bombs.nonEmpty || safeTodo.nonEmpty
       }
 
-      val maxLimit = 20
+      val maxLimit = 100
       def findSolutionForGivenLineOfPoints(connectedPointsInArea: Traversable[Point]) = {
         val full = connectedPointsInArea.toList
         val alwaysBombs = mutable.HashSet.empty[Point] ++= full
@@ -194,6 +196,7 @@ class HoDSolve2016 extends MineFinder {
           def storeConclusion() = {
             alwaysBombs.retain(bombs)
             alwaysSafe.retain(safe)
+            stats.bruteForcedSolutions += 1
           }
 
           val nextDepth = remainingDepth - 1
@@ -253,7 +256,7 @@ class HoDSolve2016 extends MineFinder {
       changed = false
       if (!myField.solved) {
         changed |= quickSolve()
-        if (!changed) {
+        if (!changed && !myField.solved) {
           changed |= deepSolve()
         }
       }
