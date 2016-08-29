@@ -19,17 +19,18 @@ import java.util.Set;
 /**
  * Ultimativer Minesweeper-Löser.
  */
-public class HodSolve6d
+public class HodSolve2006Final
   implements MineFinder
 {
 // ------------------------------ FIELDS ------------------------------
 
+  private static final AmbigousAreaException AMBIGOUS_AREA_EXCEPTION = new AmbigousAreaException();
   //~ Static fields/initializers
   private static final boolean DEBUG_DETAILS = false;
   private static final int BOMB_COUNT_UNKNOWN_YET = -1;
   private static final int BOMB_FOUND = -2;
   private static final int EVENT_HORIZON = 3;
-  private static final String ID_NAME = "HamsterofDeath Minefinder 0.6d";
+  private static final String ID_NAME = "HamsterofDeath Minefinder 0.6e";
 
   //~ Instance fields
 
@@ -40,6 +41,7 @@ public class HodSolve6d
    */
   private boolean[][] isDangerous;
   private boolean[][] isMarkedAsTested;
+  private boolean[][] isMarkedAsTestedBackup;
   private boolean[][] isNotSmoothed;
   /**
    * Flag, ob ein Feld vollständig von aufgedeckten Feldern umkreist ist
@@ -55,6 +57,7 @@ public class HodSolve6d
   private int stackOverflowErrors = 0;
 
   private int width;
+  private int[][] bcBackup;
 
   /**
    * Cache für die Werte aufgedeckter Felder, aus Performancegründen
@@ -97,13 +100,12 @@ public class HodSolve6d
   /**
    * Creates a new HodSolve5d object.
    */
-  public HodSolve6d()
+  public HodSolve2006Final()
   {
     super();
   }
 
 // ------------------------ INTERFACE METHODS ------------------------
-
 
 // --------------------- Interface MineFinder ---------------------
 
@@ -178,21 +180,16 @@ public class HodSolve6d
    */
   private void evaluateFieldStates(List<Point> mustBeSmoothed,
                                    List<Point> outline,
-                                   LinkedList<Point> bombs,
-                                   LinkedList<Point> secureFields,
+                                   Point[] bombs,
+                                   int bombCount,
+                                   Point[] secureFields,
+                                   int secureFieldCount,
                                    Solution foundSolutions,
                                    int index,
                                    final int maxDepth,
                                    int currentDepth,
-                                   int bombsLeft, boolean solveEverything)
+                                   int bombsLeft, boolean solveEverything) throws AmbigousAreaException
   {
-    if (foundSolutions.areAllFieldsAmbigous())
-    {
-      //Die bisher gefundenen Lösungen widersprechen sich in jedem einzelnen Feld mindestens 1 mal
-      //Weitermachen ist sinnlos
-      return;
-    }
-
     if (DEBUG_DETAILS)
     {
       bruteForceStepCounter++;
@@ -217,121 +214,59 @@ public class HodSolve6d
         }
       }
       //Alles klar, gültige Lösung :)
-      foundSolutions.merge(new SolvedLine(bombs, secureFields));
+      foundSolutions.merge(new SolvedLine(bombs, bombCount, secureFields, secureFieldCount));
+      if (foundSolutions.areAllFieldsAmbigous())
+      {
+        //Die bisher gefundenen Lösungen widersprechen sich in jedem einzelnen Feld mindestens 1 mal
+        //Weitermachen ist sinnlos
+        throw AMBIGOUS_AREA_EXCEPTION;
+        //return;
+      }
       return;
     }
     Point checkMe = outline.get(index);
     int x = checkMe.x;
     int y = checkMe.y;
     isMarkedAsTested[x][y] = true;
-    //Erst die Bombenversion durchtesten
+
+
     if (maybeBombed(x, y))
     {
       smoothBombfield(x, y);
-      bombs.add(checkMe);
+      bombs[bombCount++] = checkMe;
       evaluateFieldStates(mustBeSmoothed,
                           outline,
                           bombs,
+                          bombCount,
                           secureFields,
+                          secureFieldCount,
                           foundSolutions,
                           index + 1,
                           maxDepth,
                           currentDepth,
                           bombsLeft - 1, solveEverything);
       deSmoothBombfield(x, y);
-      bombs.removeLast();
+      bombCount--;
     }
-
     if (maybeFree(x, y))
     {
-      //Dann die Keine-Bombe-Variante durchspielen
-      secureFields.add(checkMe);
+      secureFields[secureFieldCount++] = checkMe;
       evaluateFieldStates(mustBeSmoothed,
                           outline,
                           bombs,
+                          bombCount,
                           secureFields,
+                          secureFieldCount,
                           foundSolutions,
                           index + 1,
                           maxDepth,
                           currentDepth,
                           bombsLeft, solveEverything);
-      secureFields.removeLast();
+      secureFieldCount--;
     }
     isMarkedAsTested[x][y] = false;
 
     //Sackgasse erreicht.
-  }
-
-  /**
-   * Prüft anhand der Werte der das aktuelle Feld umgebenden Felder, ob das Feld eine Bombe enthalten kann, ohne dadurch
-   * bereits bekannten Werten zu widersprechen.
-   *
-   * @param x
-   * @param y
-   *
-   * @return
-   */
-  private boolean maybeBombed(int x, int y)
-  {
-    Point p;
-    int xx;
-    int[] smoothedInts;
-    int[] bc;
-    int yy;
-    for (int added = setSurroundingPoints(x, y, eightPointsForMaybeBombed,
-                                          true); --added >= 0;)
-    {
-      p = eightPointsForMaybeBombed[added];
-      xx = p.x;
-      smoothedInts = bombCountSmoothed[xx];
-      bc = bombCount[xx];
-      yy = p.y;
-      if (smoothedInts[yy] > 0)
-      {
-        //Hier könnte eine Bombe liegen, da nicht alle Bombennachbarn von p gefunden worden sind
-        return true;
-      }
-      else if (bc[yy] == 0 || bc[yy] != BOMB_COUNT_UNKNOWN_YET &&
-        smoothedInts[yy] == 0)
-      {
-        //Hier kann unmöglich eine Bombe liegen
-        return false;
-      }
-    }
-    //Es konnte nicht ausgeschlossen werden, dass hier eine Bombe liegt
-    return true;
-  }
-
-  //~
-
-  private void smoothBombfield(
-    int x,
-    int y
-  )
-  {
-    Point p;
-    for (int i = setSurroundingPoints(x, y, eightPointsForSmoothBombField,
-                                      true); --i >= 0;)
-    {
-      p = eightPointsForSmoothBombField[i];
-      bombCountSmoothed[p.x][p.y]--;
-    }
-  }
-
-  //~
-
-  private void deSmoothBombfield(
-    int x,
-    int y
-  )
-  {
-    Point p;
-    for (int i = setSurroundingPoints(x, y, eightPointsForSmoothBombField,
-                                      true); --i >= 0;)
-    {
-      p = eightPointsForSmoothBombField[i];
-      bombCountSmoothed[p.x][p.y]++;
-    }
   }
 
   /**
@@ -376,6 +311,204 @@ public class HodSolve6d
     return true;
   }
 
+  /**
+   * Prüft anhand der Werte der das aktuelle Feld umgebenden Felder, ob das Feld eine Bombe enthalten kann, ohne dadurch
+   * bereits bekannten Werten zu widersprechen.
+   *
+   * @param x
+   * @param y
+   *
+   * @return
+   */
+  private boolean maybeBombed(int x, int y)
+  {
+    Point p;
+    int xx;
+    int[] smoothedInts;
+    int[] bc;
+    int yy;
+    for (int added = setSurroundingPoints(x, y, eightPointsForMaybeBombed,
+                                          true); --added >= 0;)
+    {
+      p = eightPointsForMaybeBombed[added];
+      xx = p.x;
+      smoothedInts = bombCountSmoothed[xx];
+      bc = bombCount[xx];
+      yy = p.y;
+      if (smoothedInts[yy] > 0)
+      {
+        //Hier könnte eine Bombe liegen, da nicht alle Bombennachbarn von p gefunden worden sind
+        return true;
+      }
+      else if (bc[yy] == 0 || bc[yy] != BOMB_COUNT_UNKNOWN_YET &&
+        smoothedInts[yy] == 0)
+      {
+        //Hier kann unmöglich eine Bombe liegen
+        return false;
+      }
+    }
+    //Es konnte nicht ausgeschlossen werden, dass hier eine Bombe liegt
+    return true;
+  }
+
+  /**
+   * Fügt einer Liste Punkte hinzu, die ein bestimmtes Feld einschließen
+   *
+   * @param x             Umkreister Punkt, X-koordinate
+   * @param y             Umkreister Punkt, Y-koordinate
+   * @param putHere       Liste, an die Elemente angefügt werden sollen
+   * @param includeOpened True, wenn bereits aufgedeckte Felder mit in die Liste gesteckt werden sollen
+   *
+   * @return Anzahl hinzugefügter Elemente
+   */
+  private int setSurroundingPoints
+    (
+      int x,
+      int y,
+      Point[] putHere,
+      boolean includeOpened
+    )
+  {
+    int index = 0;
+    int extendedSurrounding = 2;
+    int dummy1 = x + extendedSurrounding;
+    int maxX = (dummy1 <= width) ? dummy1 : width;
+    int dummy2 = y + extendedSurrounding;
+    int maxY = (dummy2 <= height) ? dummy2 : height;
+    int dummy3 = y - 1;
+    int minY = (dummy3 >= 0) ? dummy3 : 0;
+    int dummy4 = x - 1;
+    int minX = (dummy4 >= 0) ? dummy4 : 0;
+    if (includeOpened)
+    {
+      // "Spezial"-fall: Man braucht genau die 8 umliegenden
+      int minXPlus1 = minX + 1;
+      int minYPlus1 = minY + 1;
+      int minXPlus2 = minX + 2;
+      int minYPlus2 = minY + 2;
+      if (((minXPlus2 + 1) == maxX) && ((minYPlus2 + 1) == maxY))
+      {
+        putHere[0] = this.pointSource[minX][minY];
+        putHere[1] = this.pointSource[minXPlus1][minY];
+        putHere[2] = this.pointSource[minXPlus2][minY];
+        putHere[3] = this.pointSource[minX][minYPlus1];
+        putHere[4] = this.pointSource[minXPlus2][minYPlus1];
+        putHere[5] = this.pointSource[minX][minYPlus2];
+        putHere[6] = this.pointSource[minXPlus1][minYPlus2];
+        putHere[7] = this.pointSource[minXPlus2][minYPlus2];
+
+        return 8;
+      }
+      else
+      {
+        // Beschnittenes Feld:
+        int yy;
+        for (int xx = minX; xx < maxX; xx++)
+        {
+          for (yy = minY; yy < maxY; yy++)
+          {
+            if ((x != xx) || (y != yy))
+            {
+              putHere[index++] = this.pointSource[xx][yy];
+            }
+          }
+        }
+      }
+    }
+    else
+    {
+      // "Spezial"-fall: Man braucht genau die 8 umliegenden
+      int minXPlus1 = minX + 1;
+      int minYPlus1 = minY + 1;
+      int minXPlus2 = minX + 2;
+      int minYPlus2 = minY + 2;
+      if (((minXPlus2 + 1) == maxX) && ((minYPlus2 + 1) == maxY))
+      {
+        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minX][minY])
+        {
+          putHere[index++] = this.pointSource[minX][minY];
+        }
+        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minXPlus1][minY])
+        {
+          putHere[index++] = this.pointSource[minXPlus1][minY];
+        }
+        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minXPlus2][minY])
+        {
+          putHere[index++] = this.pointSource[minXPlus2][minY];
+        }
+        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minX][minYPlus1])
+        {
+          putHere[index++] = this.pointSource[minX][minYPlus1];
+        }
+        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minXPlus2][minYPlus1])
+        {
+          putHere[index++] = this.pointSource[minXPlus2][minYPlus1];
+        }
+        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minX][minYPlus2])
+        {
+          putHere[index++] = this.pointSource[minX][minYPlus2];
+        }
+        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minXPlus1][minYPlus2])
+        {
+          putHere[index++] = this.pointSource[minXPlus1][minYPlus2];
+        }
+        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minXPlus2][minYPlus2])
+        {
+          putHere[index++] = this.pointSource[minXPlus2][minYPlus2];
+        }
+      }
+      else
+      {
+        int yy;
+        for (int xx = minX; xx < maxX; xx++)
+        {
+          for (yy = minY; yy < maxY; yy++)
+          {
+            if ((BOMB_COUNT_UNKNOWN_YET == bombCount[xx][yy]) && ((xx != x)
+              || (yy != y)))
+            {
+              putHere[index++] = this.pointSource[xx][yy];
+            }
+          }
+        }
+      }
+    } // end if
+
+    return index;
+  } // end method setSurroundingPoints
+
+  //~
+
+  private void smoothBombfield(
+    int x,
+    int y
+  )
+  {
+    Point p;
+    for (int i = setSurroundingPoints(x, y, eightPointsForSmoothBombField,
+                                      true); --i >= 0;)
+    {
+      p = eightPointsForSmoothBombField[i];
+      bombCountSmoothed[p.x][p.y]--;
+    }
+  }
+
+  //~
+
+  private void deSmoothBombfield(
+    int x,
+    int y
+  )
+  {
+    Point p;
+    for (int i = setSurroundingPoints(x, y, eightPointsForSmoothBombField,
+                                      true); --i >= 0;)
+    {
+      p = eightPointsForSmoothBombField[i];
+      bombCountSmoothed[p.x][p.y]++;
+    }
+  }
+
   //~
 
   private int getRemainingFieldCount()
@@ -406,8 +539,10 @@ public class HodSolve6d
     height = mineField.getFieldSize().height;
     width = mineField.getFieldSize().width;
     bombCount = new int[width][height];
+    bcBackup = new int[width][height];
     isDangerous = new boolean[width][height];
     isMarkedAsTested = new boolean[width][height];
+    isMarkedAsTestedBackup = new boolean[width][height];
     isPrisoner = new boolean[width][height];
     isNotSmoothed = new boolean[width][height];
     remainingFields = width * height;
@@ -679,7 +814,7 @@ public class HodSolve6d
   /**
    * Kompletter Feldscan
    *
-   * @throws NoMoreBombsException
+   * @throws ai.NoMoreBombsException
    */
   private void rescanComplete()
     throws NoMoreBombsException
@@ -962,8 +1097,7 @@ public class HodSolve6d
       SolvedLine result = null;
       try
       {
-        result = evaluateFieldStates(new ArrayList<Point>(area), bombs,
-                                     secureFields, false);
+        result = evaluateFieldStates(area, false);
         //Erfolgreiche Lösungen sammeln
         if (result != null && (!result.bombs.isEmpty() ||
           !result.secureFields.isEmpty()))
@@ -1001,8 +1135,7 @@ public class HodSolve6d
       {
         System.out.printf("Bruteforce per area failed, using bruteforce on whole field\n");
       }
-      ret.add(evaluateFieldStates(getWholeField(), bombs, secureFields,
-                                  true));
+      ret.add(evaluateFieldStates(getWholeField(), true));
     }
 
     return ret;
@@ -1088,29 +1221,39 @@ public class HodSolve6d
     }
   }
 
-  private SolvedLine evaluateFieldStates(List<Point> outline,
-                                         LinkedList<Point> bombs, LinkedList<Point> secureFields, boolean
-    solveEverything)
+  private SolvedLine evaluateFieldStates(List<Point> outline, boolean solveEverything)
   {
     int maxDepth = outline.size();
     if (DEBUG_DETAILS)
     {
-      System.out.printf("Checking " + (solveEverything ? "area" : "line") + "containing point (%d/%d), size %d\n",
+      System.out.printf("Checking " + (solveEverything ? "area" : "line") + " containing point (%d/%d), size %d\n",
                         outline.get(0).x + 1,
                         outline.get(0).y + 1,
                         maxDepth);
     }
     Solution solutions = new Solution();
     bruteForceStepCounter++;
-    evaluateFieldStates(getNeighborsOfOutline(outline),
-                        outline,
-                        bombs,
-                        secureFields,
-                        solutions,
-                        0,
-                        maxDepth,
-                        0,
-                        remainingBombs, solveEverything);
+    Point[] dummyBombs = new Point[outline.size()];
+    Point[] dummySecureFields = new Point[outline.size()];
+    backupBCData();
+    try
+    {
+      evaluateFieldStates(getNeighborsOfOutline(outline),
+                          outline,
+                          dummyBombs,
+                          0,
+                          dummySecureFields,
+                          0,
+                          solutions,
+                          0,
+                          maxDepth,
+                          0,
+                          remainingBombs, solveEverything);
+    }
+    catch (AmbigousAreaException e)
+    {
+      restoreSmoothedBCData();
+    }
 
     if (DEBUG_DETAILS)
     {
@@ -1131,6 +1274,18 @@ public class HodSolve6d
                         finalSolution.secureFields.size());
     }
     return finalSolution;
+  }
+
+  private void backupBCData()
+  {
+    for (int i = bombCountSmoothed.length; --i >= 0;)
+    {
+      System.arraycopy(bombCountSmoothed[i], 0, bcBackup[i], 0, width);
+    }
+    for (int i = isMarkedAsTested.length; --i >= 0;)
+    {
+      System.arraycopy(isMarkedAsTested[i], 0, isMarkedAsTestedBackup[i], 0, width);
+    }
   }
 
   /**
@@ -1162,132 +1317,6 @@ public class HodSolve6d
   }
 
   /**
-   * Fügt einer Liste Punkte hinzu, die ein bestimmtes Feld einschließen
-   *
-   * @param x             Umkreister Punkt, X-koordinate
-   * @param y             Umkreister Punkt, Y-koordinate
-   * @param putHere       Liste, an die Elemente angefügt werden sollen
-   * @param includeOpened True, wenn bereits aufgedeckte Felder mit in die Liste gesteckt werden sollen
-   *
-   * @return Anzahl hinzugefügter Elemente
-   */
-  private int setSurroundingPoints
-    (
-      int x,
-      int y,
-      Point[] putHere,
-      boolean includeOpened
-    )
-  {
-    int index = 0;
-    int extendedSurrounding = 2;
-    int dummy1 = x + extendedSurrounding;
-    int maxX = (dummy1 <= width) ? dummy1 : width;
-    int dummy2 = y + extendedSurrounding;
-    int maxY = (dummy2 <= height) ? dummy2 : height;
-    int dummy3 = y - 1;
-    int minY = (dummy3 >= 0) ? dummy3 : 0;
-    int dummy4 = x - 1;
-    int minX = (dummy4 >= 0) ? dummy4 : 0;
-    if (includeOpened)
-    {
-      // "Spezial"-fall: Man braucht genau die 8 umliegenden
-      int minXPlus1 = minX + 1;
-      int minYPlus1 = minY + 1;
-      int minXPlus2 = minX + 2;
-      int minYPlus2 = minY + 2;
-      if (((minXPlus2 + 1) == maxX) && ((minYPlus2 + 1) == maxY))
-      {
-        putHere[0] = this.pointSource[minX][minY];
-        putHere[1] = this.pointSource[minXPlus1][minY];
-        putHere[2] = this.pointSource[minXPlus2][minY];
-        putHere[3] = this.pointSource[minX][minYPlus1];
-        putHere[4] = this.pointSource[minXPlus2][minYPlus1];
-        putHere[5] = this.pointSource[minX][minYPlus2];
-        putHere[6] = this.pointSource[minXPlus1][minYPlus2];
-        putHere[7] = this.pointSource[minXPlus2][minYPlus2];
-
-        return 8;
-      }
-      else
-      {
-        // Beschnittenes Feld:
-        int yy;
-        for (int xx = minX; xx < maxX; xx++)
-        {
-          for (yy = minY; yy < maxY; yy++)
-          {
-            if ((x != xx) || (y != yy))
-            {
-              putHere[index++] = this.pointSource[xx][yy];
-            }
-          }
-        }
-      }
-    }
-    else
-    {
-      // "Spezial"-fall: Man braucht genau die 8 umliegenden
-      int minXPlus1 = minX + 1;
-      int minYPlus1 = minY + 1;
-      int minXPlus2 = minX + 2;
-      int minYPlus2 = minY + 2;
-      if (((minXPlus2 + 1) == maxX) && ((minYPlus2 + 1) == maxY))
-      {
-        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minX][minY])
-        {
-          putHere[index++] = this.pointSource[minX][minY];
-        }
-        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minXPlus1][minY])
-        {
-          putHere[index++] = this.pointSource[minXPlus1][minY];
-        }
-        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minXPlus2][minY])
-        {
-          putHere[index++] = this.pointSource[minXPlus2][minY];
-        }
-        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minX][minYPlus1])
-        {
-          putHere[index++] = this.pointSource[minX][minYPlus1];
-        }
-        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minXPlus2][minYPlus1])
-        {
-          putHere[index++] = this.pointSource[minXPlus2][minYPlus1];
-        }
-        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minX][minYPlus2])
-        {
-          putHere[index++] = this.pointSource[minX][minYPlus2];
-        }
-        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minXPlus1][minYPlus2])
-        {
-          putHere[index++] = this.pointSource[minXPlus1][minYPlus2];
-        }
-        if (BOMB_COUNT_UNKNOWN_YET == bombCount[minXPlus2][minYPlus2])
-        {
-          putHere[index++] = this.pointSource[minXPlus2][minYPlus2];
-        }
-      }
-      else
-      {
-        int yy;
-        for (int xx = minX; xx < maxX; xx++)
-        {
-          for (yy = minY; yy < maxY; yy++)
-          {
-            if ((BOMB_COUNT_UNKNOWN_YET == bombCount[xx][yy]) && ((xx != x)
-              || (yy != y)))
-            {
-              putHere[index++] = this.pointSource[xx][yy];
-            }
-          }
-        }
-      }
-    } // end if
-
-    return index;
-  } // end method setSurroundingPoints
-
-  /**
    * @param checkMyNeighbors
    * @param outline
    *
@@ -1311,20 +1340,43 @@ public class HodSolve6d
     return true;
   }
 
+  private void restoreSmoothedBCData()
+  {
+    for (int i = bombCountSmoothed.length; --i >= 0;)
+    {
+      System.arraycopy(bcBackup[i], 0, bombCountSmoothed[i], 0, width);
+    }
+    for (int i = isMarkedAsTested.length; --i >= 0;)
+    {
+      System.arraycopy(isMarkedAsTestedBackup[i], 0, isMarkedAsTested[i], 0, width);
+    }
+
+  }
+
   private List<Point> getWholeField()
   {
     List<Point> ret = new ArrayList<Point>(remainingFields);
-    int[] ints;
-    Point[] points;
-    for (int x = width; --x >= 0;)
+    for (int doubleRow = 0; doubleRow + 1 < height; doubleRow += 2)
     {
-      ints = bombCount[x];
-      points = pointSource[x];
-      for (int y = height; --y >= 0;)
+      for (int x = width; --x >= 0;)
       {
-        if (ints[y] == BOMB_COUNT_UNKNOWN_YET)
+        if (bombCount[x][doubleRow]==BOMB_COUNT_UNKNOWN_YET)
         {
-          ret.add(points[y]);
+          ret.add(pointSource[x][doubleRow]);
+        }
+        if (bombCount[x][doubleRow+1]==BOMB_COUNT_UNKNOWN_YET)
+        {
+          ret.add(pointSource[x][doubleRow+1]);
+        }
+      }
+    }
+    if (height%2!=0)
+    {
+      for (int x = width; --x >= 0;)
+      {
+        if (bombCount[x][height-1]==BOMB_COUNT_UNKNOWN_YET)
+        {
+          ret.add(pointSource[x][height-1]);
         }
       }
     }
@@ -1416,12 +1468,27 @@ public class HodSolve6d
       this.bombs = new ArrayList<Point>(bombs);
       this.secureFields = new ArrayList<Point>(secureFields);
     }
+
+    public SolvedLine(Point[] bombs, int bombCount, Point[] secureFields, int secureFieldCount)
+    {
+      this.bombs = new ArrayList<Point>(bombCount);
+      for (int i = 0; i < bombCount; i++)
+      {
+        this.bombs.add(bombs[i]);
+      }
+      this.secureFields = new ArrayList<Point>(secureFieldCount);
+      for (int i = 0; i < secureFieldCount; i++)
+      {
+        this.secureFields.add(secureFields[i]);
+      }
+    }
   }
 
   private static class Solution
   {
 // ------------------------------ FIELDS ------------------------------
 
+    private boolean isAmbigous;
     private List<Point> bombs;
     private List<Point> secureFields;
 
@@ -1445,12 +1512,12 @@ public class HodSolve6d
       {
         secureFields.addAll(o.secureFields);
       }
+      isAmbigous = bombs != null && bombs.isEmpty() && secureFields != null && secureFields.isEmpty();
     }
 
     public boolean areAllFieldsAmbigous()
     {
-      return
-        bombs != null && bombs.isEmpty() && secureFields != null && secureFields.isEmpty();
+      return isAmbigous;
     }
 
     /**
@@ -1487,10 +1554,15 @@ public class HodSolve6d
       {
         secureFields.retainAll(o.secureFields);
       }
+      isAmbigous = bombs != null && bombs.isEmpty() && secureFields != null && secureFields.isEmpty();
     }
   }
 
   private static class NoMoreBombsException extends Exception
+  {
+  }
+
+  private static class AmbigousAreaException extends Exception
   {
   }
 } // end class HodSolve6d

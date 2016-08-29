@@ -35,8 +35,8 @@
     <option name="myForwardDirection" value="false" />
   </component>
   <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/src/ai/HodSolve2006Final.java" charset="UTF-8" />
     <file url="file://$PROJECT_DIR$/src/ai/HodSolve6d.java" charset="UTF-8" />
-    <file url="file://$PROJECT_DIR$/src/ai/HodSolve6e.java" charset="UTF-8" />
   </component>
   <component name="EntryPointsManager">
     <entry_points version="2.0" />
@@ -201,7 +201,7 @@
       <module fileurl="file://$PROJECT_DIR$/MineSweeper.iml" filepath="$PROJECT_DIR$/MineSweeper.iml" />
     </modules>
   </component>
-  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_8" default="false" assert-keyword="true" jdk-15="true" project-jdk-name="1.8.65x86" project-jdk-type="JavaSDK" />
+  <component name="ProjectRootManager" version="2" languageLevel="JDK_1_8" default="false" assert-keyword="true" jdk-15="true" project-jdk-name="1.8" project-jdk-type="JavaSDK" />
   <component name="RMI Configuration">
     <Server />
     <Port>0</Port>
