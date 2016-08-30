@@ -91,7 +91,7 @@ class HoDSolve2016 extends MineFinder {
           }
         }
 
-        if (safeTodo.nonEmpty) {
+        def handleSafe(): Unit = {
           val next = safeTodo.remove(safeTodo.size - 1)
           stats.putInSafeList += 1
           if (myField.isClosed(next)) {
@@ -99,7 +99,9 @@ class HoDSolve2016 extends MineFinder {
           } else {
             stats.duplicatedInSafeList += 1
           }
-        } else if (unsafeTodo.nonEmpty) {
+        }
+
+        def handleUnsafe(): Unit = {
           val next = unsafeTodo.remove(unsafeTodo.size - 1)
           stats.putInUnsafeList += 1
           if (myField.isClosed(next)) {
@@ -114,7 +116,9 @@ class HoDSolve2016 extends MineFinder {
           } else {
             stats.duplicateInUnsafeList += 1
           }
-        } else if (expensiveTodo.nonEmpty) {
+        }
+
+        def handleExpensive(): Unit = {
           val next = expensiveTodo.remove(expensiveTodo.size - 1)
           stats.putInExpensiveList += 1
           if (myField.isClosed(next)) {
@@ -133,6 +137,14 @@ class HoDSolve2016 extends MineFinder {
             stats.gotStuck += 1
             unsafeTodo ++= nextTries
           }
+        }
+
+        if (safeTodo.nonEmpty) {
+          handleSafe()
+        } else if (unsafeTodo.nonEmpty) {
+          handleUnsafe()
+        } else if (expensiveTodo.nonEmpty) {
+          handleExpensive()
         }
       }
       change
@@ -303,25 +315,25 @@ class HoDSolve2016 extends MineFinder {
       }
     }
 
-    @inline def isClosed(where: Point): Boolean = !isOpen(where) &&
-                                                  !bombDetected.at(where)
+    def isClosed(where: Point): Boolean = !isOpen(where) &&
+                                          !bombDetected.at(where)
 
-    @inline def isOpen(where: Point) = bombCounts.at(where) != UNKNOWN_STATE
+    def isOpen(where: Point) = bombCounts.at(where) != UNKNOWN_STATE
 
-    @inline def mustBeSafe(where: Point) = {
+    def mustBeSafe(where: Point) = {
       around(where, withOpen = true).exists { box =>
         remainingSurroundingBombs.at(box) == 0 && isOpen(box)
       }
     }
 
-    @inline def canBeBomb(where: Point) = !mustBeSafe(where)
-    @inline def canBeSafe(where: Point) = !mustBeBomb(where)
+    def canBeBomb(where: Point) = !mustBeSafe(where)
+    def canBeSafe(where: Point) = !mustBeBomb(where)
 
-    @inline def pretendBomb(where: Point) = {
+    def pretendBomb(where: Point) = {
       informBomb(where)
     }
 
-    @inline def rectangleAround(where: Point, range: Int): Traversable[Point] = {
+    def rectangleAround(where: Point, range: Int): Traversable[Point] = {
       val minX = 0 max (where.x - range)
       val maxX = width min (where.x + range + 1)
       val minY = 0 max (where.y - range)
@@ -338,8 +350,8 @@ class HoDSolve2016 extends MineFinder {
       }
     }
 
-    @inline def mustBeSafeViaContradiction(where: Point) = {
-      @inline def contradiction(p: Point) = {
+    def mustBeSafeViaContradiction(where: Point) = {
+      def contradiction(p: Point) = {
         val reference = remainingSurroundingBombs.at(p)
         def possible = around(p, withHidden = true).count { canIBeABomb =>
           !around(canIBeABomb, withOpen = true).exists { checkIfIAmZero =>
@@ -375,7 +387,7 @@ class HoDSolve2016 extends MineFinder {
       }).mkString("\n")
     }
 
-    @inline def mustBeBomb(where: Point) = {
+    def mustBeBomb(where: Point) = {
       pretendOpen(where)
       val bomb = around(where, withOpen = true).exists { box =>
         val possibleRemainingBombs = around(box, withHidden = true).size
@@ -385,27 +397,27 @@ class HoDSolve2016 extends MineFinder {
       bomb
     }
 
-    @inline def pretendSafe(where: Point): Unit = {
+    def pretendSafe(where: Point): Unit = {
       pretendOpen(where)
       remainingSurroundingBombs(where.x)(where.y) -= 100
     }
 
-    @inline def pretendOpen(where: Point): Unit = {
+    def pretendOpen(where: Point): Unit = {
       bombCounts(where.x)(where.y) = 0
     }
 
-    @inline def unpretendOpen(where: Point): Unit = {
+    def unpretendOpen(where: Point): Unit = {
       bombCounts(where.x)(where.y) = UNKNOWN_STATE
     }
 
-    @inline def unpretendSafe(where: Point): Unit = {
+    def unpretendSafe(where: Point): Unit = {
       unpretendOpen(where)
       remainingSurroundingBombs(where.x)(where.y) += 100
     }
 
-    @inline def allAround(where: Point) = around(where, withHidden = true, withOpen = true)
+    def allAround(where: Point) = around(where, withHidden = true, withOpen = true)
 
-    @inline def informBomb(where: Point): Unit = {
+    def informBomb(where: Point): Unit = {
       remainingBombs -= 1
       unknown -= 1
       allAround(where).foreach { where =>
@@ -414,7 +426,7 @@ class HoDSolve2016 extends MineFinder {
       bombDetected(where.x)(where.y) = true
     }
 
-    @inline def unPretendBomb(where: Point): Unit = {
+    def unPretendBomb(where: Point): Unit = {
       remainingBombs += 1
       allAround(where).foreach { where =>
         remainingSurroundingBombs(where.x)(where.y) += 1
@@ -425,7 +437,7 @@ class HoDSolve2016 extends MineFinder {
     private var unknown        = width * height
     private var remainingBombs = bombs
 
-    @inline def informSafe(where: Point, bombCount: Int): Unit = {
+    def informSafe(where: Point, bombCount: Int): Unit = {
       bombCounts(where.x)(where.y) = bombCount
       remainingSurroundingBombs(where.x)(where.y) += bombCount
 
@@ -433,40 +445,40 @@ class HoDSolve2016 extends MineFinder {
       freeFieldsLeft -= 1
     }
 
-    @inline def around(p: Point, withHidden: Boolean = false,
-                       withOpen: Boolean = false,
-                       mutablePoints: Boolean = true,
-                       prioritizeNear: Boolean = false): Traversable[Point] = {
+    def around(p: Point, withHidden: Boolean = false,
+               withOpen: Boolean = false,
+               mutablePoints: Boolean = true,
+               prioritizeNear: Boolean = false): Traversable[Point] = {
       val withAll = withHidden && withOpen
-      val t: Traversable[Point] = new Traversable[Point] {
+      val base: Traversable[Point] = new Traversable[Point] {
 
-        @inline def isInBoundsUnknown(p: Point) = inBounds(p) && isUnknown(p)
+        def isInBoundsUnknown(p: Point) = inBounds(p) && isUnknown(p)
 
-        @inline def inBounds(p: Point) = {
+        def inBounds(p: Point) = {
           p.x >= 0 &&
           p.y >= 0 &&
           p.x < width &&
           p.y < height
         }
 
-        @inline def isInBoundsKnown(p: Point) = inBounds(p) && isKnown(p)
-        @inline def isUnknown(p: Point) = isClosed(p)
-        @inline def isKnown(p: Point) = bombCounts(p.x)(p.y) != UNKNOWN_STATE
-        @inline def simple = notLeft && notRight && notTop && notBottom
-        @inline def notLeft = p.x > 0
-        @inline def left = !notLeft
-        @inline def notRight = p.x < width - 1
-        @inline def right = !notRight
-        @inline def notTop = p.y > 0
-        @inline def top = !notTop
-        @inline def notBottom = p.y < height - 1
-        @inline def bottom = !notBottom
+        def isInBoundsKnown(p: Point) = inBounds(p) && isKnown(p)
+        def isUnknown(p: Point) = isClosed(p)
+        def isKnown(p: Point) = bombCounts.at(p) != UNKNOWN_STATE
+        def simple = notLeft && notRight && notTop && notBottom
+        def notLeft = p.x > 0
+        def left = !notLeft
+        def notRight = p.x < width - 1
+        def right = !notRight
+        def notTop = p.y > 0
+        def top = !notTop
+        def notBottom = p.y < height - 1
+        def bottom = !notBottom
 
-        @inline def checked[U](f: Point => U) = {
+        def checked[U](f: Point => U) = {
           allWithTest(f, if (withAll) inBounds else if (withHidden) isInBoundsUnknown else isInBoundsKnown)
         }
 
-        @inline def unchecked[U](f: Point => U) = {
+        def unchecked[U](f: Point => U) = {
           if (withAll) {
             all(f)
           } else {
@@ -474,83 +486,97 @@ class HoDSolve2016 extends MineFinder {
           }
         }
 
-        @inline def all[U](f: (Point) => U) = {
+        def all[U](f: (Point) => U) = {
           if (prioritizeNear) {
-            val mut = new Point(p.x - 1, p.y)
-            f(mut) // left
-            mut.x += 2
-            f(mut) // right
-            mut.x -= 1
-            mut.y -= 1
-            f(mut) // top
-            mut.y += 2
-            f(mut) // bottom
-            mut.x -= 1
-            f(mut) // bottom left
-            mut.x += 2
-            f(mut) // bottom right
-            mut.y -= 2
-            f(mut) // top right
-            mut.x -= 2
-            f(mut) // top left
-
+            allLRTBFirst(f)
           } else {
-            val mut = new Point(p.x - 1, p.y - 1)
-            f(mut)
-            mut.x += 1
-            f(mut)
-            mut.x += 1
-            f(mut)
-            mut.y += 1
-            f(mut)
-            mut.y += 1
-            f(mut)
-            mut.x -= 1
-            f(mut)
-            mut.x -= 1
-            f(mut)
-            mut.y -= 1
-            f(mut)
+            allClockWise(f)
           }
         }
 
-        @inline def allWithTest[U](f: (Point) => U, @inline test: Point => Boolean) = {
+        def allLRTBFirst[U](f: (Point) => U): U = {
+          val mut = new Point(p.x - 1, p.y)
+          f(mut) // left
+          mut.x += 2
+          f(mut) // right
+          mut.x -= 1
+          mut.y -= 1
+          f(mut) // top
+          mut.y += 2
+          f(mut) // bottom
+          mut.x -= 1
+          f(mut) // bottom left
+          mut.x += 2
+          f(mut) // bottom right
+          mut.y -= 2
+          f(mut) // top right
+          mut.x -= 2
+          f(mut) // top left
+        }
+
+        def allClockWise[U](f: (Point) => U): U = {
+          val mut = new Point(p.x - 1, p.y - 1)
+          f(mut)
+          mut.x += 1
+          f(mut)
+          mut.x += 1
+          f(mut)
+          mut.y += 1
+          f(mut)
+          mut.y += 1
+          f(mut)
+          mut.x -= 1
+          f(mut)
+          mut.x -= 1
+          f(mut)
+          mut.y -= 1
+          f(mut)
+        }
+        def allWithTest[U](f: (Point) => U, test: Point => Boolean) = {
           if (prioritizeNear) {
-            val mut = new Point(p.x - 1, p.y)
-            if (test(mut)) f(mut) // left
-            mut.x += 2
-            if (test(mut)) f(mut) // right
-            mut.x -= 1
-            mut.y -= 1
-            if (test(mut)) f(mut) // top
-            mut.y += 2
-            if (test(mut)) f(mut) // bottom
-            mut.x -= 1
-            if (test(mut)) f(mut) // bottom left
-            mut.x += 2
-            if (test(mut)) f(mut) // bottom right
-            mut.y -= 2
-            if (test(mut)) f(mut) // top right
-            mut.x -= 2
-            if (test(mut)) f(mut) // top left
+            allWithTestLRTBFirst(f, test)
           } else {
-            val mut = new Point(p.x - 1, p.y - 1)
-            if (test(mut)) f(mut)
-            mut.x += 1
-            if (test(mut)) f(mut)
-            mut.x += 1
-            if (test(mut)) f(mut)
-            mut.y += 1
-            if (test(mut)) f(mut)
-            mut.y += 1
-            if (test(mut)) f(mut)
-            mut.x -= 1
-            if (test(mut)) f(mut)
-            mut.x -= 1
-            if (test(mut)) f(mut)
-            mut.y -= 1
-            if (test(mut)) f(mut)
+            allWithTestClockWise(f, test)
           }
+        }
+
+        def allWithTestLRTBFirst[U](f: (Point) => U, test: (Point) => Boolean): Any = {
+          val mut = new Point(p.x - 1, p.y)
+          if (test(mut)) f(mut) // left
+          mut.x += 2
+          if (test(mut)) f(mut) // right
+          mut.x -= 1
+          mut.y -= 1
+          if (test(mut)) f(mut) // top
+          mut.y += 2
+          if (test(mut)) f(mut) // bottom
+          mut.x -= 1
+          if (test(mut)) f(mut) // bottom left
+          mut.x += 2
+          if (test(mut)) f(mut) // bottom right
+          mut.y -= 2
+          if (test(mut)) f(mut) // top right
+          mut.x -= 2
+          if (test(mut)) f(mut) // top left
+        }
+
+        def allWithTestClockWise[U](f: (Point) => U, test: (Point) => Boolean): Any = {
+          val mut = new Point(p.x - 1, p.y - 1)
+          if (test(mut)) f(mut)
+          mut.x += 1
+          if (test(mut)) f(mut)
+          mut.x += 1
+          if (test(mut)) f(mut)
+          mut.y += 1
+          if (test(mut)) f(mut)
+          mut.y += 1
+          if (test(mut)) f(mut)
+          mut.x -= 1
+          if (test(mut)) f(mut)
+          mut.x -= 1
+          if (test(mut)) f(mut)
+          mut.y -= 1
+          if (test(mut)) f(mut)
         }
 
         override def foreach[U](f: (Point) => U) = {
@@ -562,10 +588,10 @@ class HoDSolve2016 extends MineFinder {
         }
       }
 
-      if (mutablePoints) t
+      if (mutablePoints) base
       else {
         val store = new mutable.ArrayBuffer[Point](8)
-        t.foreach { p =>
+        base.foreach { p =>
           store += p.copy
         }
         store
@@ -575,7 +601,6 @@ class HoDSolve2016 extends MineFinder {
     private val bombCounts                = Array.tabulate(width, height)((_, _) => UNKNOWN_STATE)
     private val remainingSurroundingBombs = Array.tabulate(width, height)((_, _) => 0)
     private val bombDetected              = Array.tabulate(width, height)((_, _) => false)
-    // private val
   }
 
 }
