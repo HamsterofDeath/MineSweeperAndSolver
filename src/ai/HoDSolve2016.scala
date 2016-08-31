@@ -192,7 +192,7 @@ class HoDSolve2016 extends MineFinder {
         def useful = bombs.nonEmpty || safeTodo.nonEmpty
       }
 
-      val maxLimit = 100
+      val maxLimit = 40
       def findSolutionForGivenLineOfPoints(connectedPointsInArea: Traversable[Point]) = {
         val full = connectedPointsInArea.toList
         val alwaysBombs = mutable.HashSet.empty[Point] ++= full
@@ -245,8 +245,9 @@ class HoDSolve2016 extends MineFinder {
         val partial = areas
         val all = mutable.ArrayBuffer(areas.flatten.to[mutable.LinkedHashSet])
         val preparedAreasToCheck = {
-          val chunked = (areas ++ all).flatMap(_.sliding(20, 15))
-          (chunked ++ areas ++ all).distinct.sortBy(_.size)
+          val chunked = (areas ++ all).flatMap(_.sliding(20, 15)) ++
+                        (areas ++ all).flatMap(_.sliding(maxLimit, maxLimit / 2))
+          (chunked ++ areas).distinct.sortBy(_.size)
         }
         preparedAreasToCheck.iterator.map(findSolutionForGivenLineOfPoints).filter(_.useful)
       }
@@ -306,10 +307,11 @@ class HoDSolve2016 extends MineFinder {
 
     def closedOutline: Traversable[Point] = new Traversable[Point] {
       override def foreach[U](f: (Point) => U) = {
+        val p = new Point
         for (x <- 0 until width; y <- 0 until height) {
-          val p = new Point(x, y)
+          p.move(x, y)
           if (isClosed(p) && around(p, withOpen = true, mutablePoints = false).nonEmpty) {
-            f(p)
+            f(p.copy)
           }
         }
       }
@@ -322,7 +324,7 @@ class HoDSolve2016 extends MineFinder {
 
     def mustBeSafe(where: Point) = {
       around(where, withOpen = true).exists { box =>
-        remainingSurroundingBombs.at(box) == 0 && isOpen(box)
+        remainingSurroundingBombs.at(box) == 0
       }
     }
 
