@@ -8,6 +8,7 @@ import scala.collection.mutable
 
 /**
   * Created by HamsterofDeath on 8/22/2016.
+  * will explode upon the smallest change because of voodoo optimizations
   */
 class HoDSolve2016 extends MineFinder {
 
