@@ -59,7 +59,7 @@ class HoDSolve2016 extends MineFinder {
   def solve(myField: FieldData, nativeField: MineField): Unit = {
     val stats = new Stats
 
-    var safeTodo = mutable.ArrayBuffer(myField.start)
+    var safeTodo = new mutable.ArrayBuffer(myField.size * 3) += myField.start
     var unsafeTodo = mutable.ArrayBuffer.empty[Point]
     var expensiveTodo = mutable.ArrayBuffer.empty[Point]
 
