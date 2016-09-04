@@ -51,7 +51,7 @@ class HoDSolve2016 extends MineFinder {
           |resortedToBruteForce:         $resortedToBruteForce,
           |bruteForceFailure:            $bruteForceFailure,
           |bruteForceSuccess:            $bruteForceSuccess,
-          |bruteForcedSolutions:         $bruteForcedSolutions,
+          |bruteForcedSolutions:         $bruteForcedSolutions
           |""".stripMargin
   }
 
@@ -71,7 +71,7 @@ class HoDSolve2016 extends MineFinder {
 
     def quickSolve() = {
       var change = false
-      while (safeTodo.nonEmpty || unsafeTodo.nonEmpty || expensiveTodo.nonEmpty) {
+      while (run && (safeTodo.nonEmpty || unsafeTodo.nonEmpty || expensiveTodo.nonEmpty)) {
 
         def flagAsBombInternally(p: Point): Unit = {
           flagAsBomb(p)
@@ -85,9 +85,9 @@ class HoDSolve2016 extends MineFinder {
           change = true
           stats.safeTotal += 1
           if (bombCount == 0) {
-            safeTodo ++= myField.around(p, withHidden = true, mutablePoints = false)
+            safeTodo ++= myField.around(p, withHidden = true, recycleInstance = false)
           } else {
-            unsafeTodo ++= myField.around(p, withHidden = true, mutablePoints = false)
+            unsafeTodo ++= myField.around(p, withHidden = true, recycleInstance = false)
           }
         }
 
@@ -109,7 +109,7 @@ class HoDSolve2016 extends MineFinder {
               openField(next)
             } else if (myField.mustBeBomb(next)) {
               flagAsBombInternally(next)
-              unsafeTodo ++= myField.around(next, withHidden = true, mutablePoints = false)
+              unsafeTodo ++= myField.around(next, withHidden = true, recycleInstance = false)
             } else {
               expensiveTodo += next
             }
@@ -261,7 +261,7 @@ class HoDSolve2016 extends MineFinder {
         safeTodo ++= applyMe.safe
         applyMe.bombs.foreach(flagAsBomb)
         applyMe.bombs.foreach { bomb =>
-          unsafeTodo ++= myField.around(bomb, withHidden = true, mutablePoints = false)
+          unsafeTodo ++= myField.around(bomb, withHidden = true, recycleInstance = false)
         }
         true
       }
@@ -310,7 +310,7 @@ class HoDSolve2016 extends MineFinder {
         val p = new Point
         for (x <- 0 until width; y <- 0 until height) {
           p.move(x, y)
-          if (isClosed(p) && around(p, withOpen = true, mutablePoints = false).nonEmpty) {
+          if (isClosed(p) && around(p, withOpen = true, recycleInstance = false).nonEmpty) {
             f(p.copy)
           }
         }
@@ -449,7 +449,7 @@ class HoDSolve2016 extends MineFinder {
 
     def around(p: Point, withHidden: Boolean = false,
                withOpen: Boolean = false,
-               mutablePoints: Boolean = true,
+               recycleInstance: Boolean = true,
                prioritizeNear: Boolean = false): Traversable[Point] = {
       val withAll = withHidden && withOpen
       val base: Traversable[Point] = new Traversable[Point] {
@@ -496,8 +496,8 @@ class HoDSolve2016 extends MineFinder {
           }
         }
 
-        def allLRTBFirst[U](f: (Point) => U): U = {
-          val mut = new Point(p.x - 1, p.y)
+        def allLRTBFirst[U](f: (Point) => U): Unit = {
+          val mut = PointStack.pop(p.x - 1, p.y)
           f(mut) // left
           mut.x += 2
           f(mut) // right
@@ -514,10 +514,11 @@ class HoDSolve2016 extends MineFinder {
           f(mut) // top right
           mut.x -= 2
           f(mut) // top left
+          PointStack.push()
         }
 
-        def allClockWise[U](f: (Point) => U): U = {
-          val mut = new Point(p.x - 1, p.y - 1)
+        def allClockWise[U](f: (Point) => U): Unit = {
+          val mut = PointStack.pop(p.x - 1, p.y - 1)
           f(mut)
           mut.x += 1
           f(mut)
@@ -534,6 +535,7 @@ class HoDSolve2016 extends MineFinder {
           mut.y -= 1
           f(mut)
         }
+
         def allWithTest[U](f: (Point) => U, test: Point => Boolean) = {
           if (prioritizeNear) {
             allWithTestLRTBFirst(f, test)
@@ -542,8 +544,8 @@ class HoDSolve2016 extends MineFinder {
           }
         }
 
-        def allWithTestLRTBFirst[U](f: (Point) => U, test: (Point) => Boolean): Any = {
-          val mut = new Point(p.x - 1, p.y)
+        def allWithTestLRTBFirst[U](f: (Point) => U, test: (Point) => Boolean) = {
+          val mut = PointStack.pop(p.x - 1, p.y)
           if (test(mut)) f(mut) // left
           mut.x += 2
           if (test(mut)) f(mut) // right
@@ -562,8 +564,8 @@ class HoDSolve2016 extends MineFinder {
           if (test(mut)) f(mut) // top left
         }
 
-        def allWithTestClockWise[U](f: (Point) => U, test: (Point) => Boolean): Any = {
-          val mut = new Point(p.x - 1, p.y - 1)
+        def allWithTestClockWise[U](f: (Point) => U, test: (Point) => Boolean) = {
+          val mut = PointStack.pop(p.x - 1, p.y - 1)
           if (test(mut)) f(mut)
           mut.x += 1
           if (test(mut)) f(mut)
@@ -582,15 +584,19 @@ class HoDSolve2016 extends MineFinder {
         }
 
         override def foreach[U](f: (Point) => U) = {
-          if (simple)
-            unchecked(f)
-          else {
-            checked(f)
+          try {
+            if (simple)
+              unchecked(f)
+            else {
+              checked(f)
+            }
+          } finally {
+            PointStack.push()
           }
         }
       }
 
-      if (mutablePoints) base
+      if (recycleInstance) base
       else {
         val store = new mutable.ArrayBuffer[Point](8)
         base.foreach { p =>
@@ -615,6 +621,25 @@ object Utils {
 
   implicit class ArrayArrayOps[T](val a: Array[Array[T]]) extends AnyVal {
     def at(p: Point) = a(p.x)(p.y)
+  }
+
+  object PointStack {
+    private var given = 0
+    private val pool  = mutable.ArrayBuffer.empty[Point]
+
+    def pop(x: Int, y: Int) = {
+      if (pool.size <= given) {
+        pool += new Point
+      }
+      val p = pool(given)
+      given += 1
+      p.move(x, y)
+      p
+    }
+
+    def push() = {
+      given -= 1
+    }
   }
 
 }
