@@ -296,7 +296,7 @@ class HoDSolve2016 extends MineFinder {
   case class FieldData(width: Int, height: Int, bombs: Int, start: Point) {
     def solved = freeFieldsLeft == 0 || remainingBombs == 0
 
-    private val size           = width * height
+    val size = width * height
     private var freeFieldsLeft = size - bombs
     def bombsLeft = remainingBombs
     def freeLeft = freeFieldsLeft
@@ -447,162 +447,203 @@ class HoDSolve2016 extends MineFinder {
       freeFieldsLeft -= 1
     }
 
-    def around(p: Point, withHidden: Boolean = false,
-               withOpen: Boolean = false,
-               recycleInstance: Boolean = true,
-               prioritizeNear: Boolean = false): Traversable[Point] = {
-      val withAll = withHidden && withOpen
-      val base: Traversable[Point] = new Traversable[Point] {
-
-        def isInBoundsUnknown(p: Point) = inBounds(p) && isUnknown(p)
-
-        def inBounds(p: Point) = {
-          p.x >= 0 &&
-          p.y >= 0 &&
-          p.x < width &&
-          p.y < height
-        }
-
-        def isInBoundsKnown(p: Point) = inBounds(p) && isKnown(p)
-        def isUnknown(p: Point) = isClosed(p)
-        def isKnown(p: Point) = bombCounts.at(p) != UNKNOWN_STATE
-        def simple = notLeft && notRight && notTop && notBottom
-        def notLeft = p.x > 0
-        def left = !notLeft
-        def notRight = p.x < width - 1
-        def right = !notRight
-        def notTop = p.y > 0
-        def top = !notTop
-        def notBottom = p.y < height - 1
-        def bottom = !notBottom
-
-        def checked[U](f: Point => U) = {
-          allWithTest(f, if (withAll) inBounds else if (withHidden) isInBoundsUnknown else isInBoundsKnown)
-        }
-
-        def unchecked[U](f: Point => U) = {
-          if (withAll) {
-            all(f)
-          } else {
-            allWithTest(f, if (withHidden) isUnknown else isKnown)
-          }
-        }
-
-        def all[U](f: (Point) => U) = {
-          if (prioritizeNear) {
-            allLRTBFirst(f)
-          } else {
-            allClockWise(f)
-          }
-        }
-
-        def allLRTBFirst[U](f: (Point) => U): Unit = {
-          val mut = PointStack.pop(p.x - 1, p.y)
-          f(mut) // left
-          mut.x += 2
-          f(mut) // right
-          mut.x -= 1
-          mut.y -= 1
-          f(mut) // top
-          mut.y += 2
-          f(mut) // bottom
-          mut.x -= 1
-          f(mut) // bottom left
-          mut.x += 2
-          f(mut) // bottom right
-          mut.y -= 2
-          f(mut) // top right
-          mut.x -= 2
-          f(mut) // top left
-          PointStack.push()
-        }
-
-        def allClockWise[U](f: (Point) => U): Unit = {
-          val mut = PointStack.pop(p.x - 1, p.y - 1)
-          f(mut)
-          mut.x += 1
-          f(mut)
-          mut.x += 1
-          f(mut)
-          mut.y += 1
-          f(mut)
-          mut.y += 1
-          f(mut)
-          mut.x -= 1
-          f(mut)
-          mut.x -= 1
-          f(mut)
-          mut.y -= 1
-          f(mut)
-        }
-
-        def allWithTest[U](f: (Point) => U, test: Point => Boolean) = {
-          if (prioritizeNear) {
-            allWithTestLRTBFirst(f, test)
-          } else {
-            allWithTestClockWise(f, test)
-          }
-        }
-
-        def allWithTestLRTBFirst[U](f: (Point) => U, test: (Point) => Boolean) = {
-          val mut = PointStack.pop(p.x - 1, p.y)
-          if (test(mut)) f(mut) // left
-          mut.x += 2
-          if (test(mut)) f(mut) // right
-          mut.x -= 1
-          mut.y -= 1
-          if (test(mut)) f(mut) // top
-          mut.y += 2
-          if (test(mut)) f(mut) // bottom
-          mut.x -= 1
-          if (test(mut)) f(mut) // bottom left
-          mut.x += 2
-          if (test(mut)) f(mut) // bottom right
-          mut.y -= 2
-          if (test(mut)) f(mut) // top right
-          mut.x -= 2
-          if (test(mut)) f(mut) // top left
-        }
-
-        def allWithTestClockWise[U](f: (Point) => U, test: (Point) => Boolean) = {
-          val mut = PointStack.pop(p.x - 1, p.y - 1)
-          if (test(mut)) f(mut)
-          mut.x += 1
-          if (test(mut)) f(mut)
-          mut.x += 1
-          if (test(mut)) f(mut)
-          mut.y += 1
-          if (test(mut)) f(mut)
-          mut.y += 1
-          if (test(mut)) f(mut)
-          mut.x -= 1
-          if (test(mut)) f(mut)
-          mut.x -= 1
-          if (test(mut)) f(mut)
-          mut.y -= 1
-          if (test(mut)) f(mut)
-        }
-
-        override def foreach[U](f: (Point) => U) = {
-          try {
-            if (simple)
-              unchecked(f)
-            else {
-              checked(f)
-            }
-          } finally {
-            PointStack.push()
-          }
+    object TraversableStack {
+      def pop(p: Point, withHidden: Boolean, withOpen: Boolean, prioritizeNear: Boolean) = {
+        if (pool.size <= given) {
+          given += 1
+          val ret = new TraversableFields(p, withHidden, withOpen, prioritizeNear)
+          pool += ret
+          ret
+        } else {
+          val traverser = pool(given)
+          given += 1
+          traverser.reInit(p, withHidden, withOpen, prioritizeNear)
+          traverser
         }
       }
 
+      private var given = 0
+      private val pool  = mutable.ArrayBuffer.empty[TraversableFields]
+
+      def push() = {
+        given -= 1
+      }
+    }
+
+    class TraversableFields(var center: Point, var withHidden: Boolean, var withOpen: Boolean,
+                            var prioritizeNear: Boolean) extends Traversable[Point] {
+
+      def reInit(p: Point, withHidden: Boolean, withOpen: Boolean, prioritizeNear: Boolean) = {
+        this.center = p
+        this.withOpen = withOpen
+        this.withHidden = withHidden
+        this.prioritizeNear = prioritizeNear
+        this
+      }
+
+      def withAll = withHidden && withOpen
+
+      val isKnown = (p: Point) => bombCounts.at(p) != UNKNOWN_STATE
+
+      val inBounds = (p: Point) => {
+        p.x >= 0 &&
+        p.y >= 0 &&
+        p.x < width &&
+        p.y < height
+      }
+
+      val isInBoundsKnown = (p: Point) => inBounds(p) && isKnown(p)
+
+      val isUnknown = (p: Point) => isClosed(p)
+
+      val isInBoundsUnknown = (p: Point) => inBounds(p) && isUnknown(p)
+
+      def simple = notLeft && notRight && notTop && notBottom
+      def notLeft = center.x > 0
+      def left = !notLeft
+      def notRight = center.x < width - 1
+      def right = !notRight
+      def notTop = center.y > 0
+      def top = !notTop
+      def notBottom = center.y < height - 1
+      def bottom = !notBottom
+
+      def checked[U](f: Point => U) = {
+        allWithTest(f, if (withAll) inBounds else if (withHidden) isInBoundsUnknown else isInBoundsKnown)
+      }
+
+      def unchecked[U](f: Point => U) = {
+        if (withAll) {
+          all(f)
+        } else {
+          allWithTest(f, if (withHidden) isUnknown else isKnown)
+        }
+      }
+
+      def all[U](f: (Point) => U) = {
+        if (prioritizeNear) {
+          allLRTBFirst(f)
+        } else {
+          allClockWise(f)
+        }
+      }
+
+      def allLRTBFirst[U](f: (Point) => U): Unit = {
+        val mut = PointStack.pop(center.x - 1, center.y)
+        f(mut) // left
+        mut.x += 2
+        f(mut) // right
+        mut.x -= 1
+        mut.y -= 1
+        f(mut) // top
+        mut.y += 2
+        f(mut) // bottom
+        mut.x -= 1
+        f(mut) // bottom left
+        mut.x += 2
+        f(mut) // bottom right
+        mut.y -= 2
+        f(mut) // top right
+        mut.x -= 2
+        f(mut) // top left
+        PointStack.push()
+      }
+
+      def allClockWise[U](f: (Point) => U): Unit = {
+        val mut = PointStack.pop(center.x - 1, center.y - 1)
+        f(mut)
+        mut.x += 1
+        f(mut)
+        mut.x += 1
+        f(mut)
+        mut.y += 1
+        f(mut)
+        mut.y += 1
+        f(mut)
+        mut.x -= 1
+        f(mut)
+        mut.x -= 1
+        f(mut)
+        mut.y -= 1
+        f(mut)
+      }
+
+      def allWithTest[U](f: (Point) => U, test: Point => Boolean) = {
+        if (prioritizeNear) {
+          allWithTestLRTBFirst(f, test)
+        } else {
+          allWithTestClockWise(f, test)
+        }
+      }
+
+      def allWithTestLRTBFirst[U](f: (Point) => U, test: (Point) => Boolean) = {
+        val mut = PointStack.pop(center.x - 1, center.y)
+        if (test(mut)) f(mut) // left
+        mut.x += 2
+        if (test(mut)) f(mut) // right
+        mut.x -= 1
+        mut.y -= 1
+        if (test(mut)) f(mut) // top
+        mut.y += 2
+        if (test(mut)) f(mut) // bottom
+        mut.x -= 1
+        if (test(mut)) f(mut) // bottom left
+        mut.x += 2
+        if (test(mut)) f(mut) // bottom right
+        mut.y -= 2
+        if (test(mut)) f(mut) // top right
+        mut.x -= 2
+        if (test(mut)) f(mut) // top left
+      }
+
+      def allWithTestClockWise[U](f: (Point) => U, test: (Point) => Boolean) = {
+        val mut = PointStack.pop(center.x - 1, center.y - 1)
+        if (test(mut)) f(mut)
+        mut.x += 1
+        if (test(mut)) f(mut)
+        mut.x += 1
+        if (test(mut)) f(mut)
+        mut.y += 1
+        if (test(mut)) f(mut)
+        mut.y += 1
+        if (test(mut)) f(mut)
+        mut.x -= 1
+        if (test(mut)) f(mut)
+        mut.x -= 1
+        if (test(mut)) f(mut)
+        mut.y -= 1
+        if (test(mut)) f(mut)
+      }
+
+      override def foreach[U](f: (Point) => U) = {
+        try {
+          if (simple)
+            unchecked(f)
+          else {
+            checked(f)
+          }
+        } finally {
+          PointStack.push()
+          TraversableStack.push()
+        }
+      }
+    }
+
+    private val clonePointHolder = mutable.ArrayBuffer.empty[Point]
+
+    def around(p: Point, withHidden: Boolean = false,
+               withOpen: Boolean = false,
+               recycleInstance: Boolean = true,
+               prioritizeNear: Boolean = false) = {
+      val base = TraversableStack.pop(p, withHidden, withOpen, prioritizeNear)
+
       if (recycleInstance) base
       else {
-        val store = new mutable.ArrayBuffer[Point](8)
+        clonePointHolder.clear()
         base.foreach { p =>
-          store += p.copy
+          clonePointHolder += p.copy
         }
-        store
+        clonePointHolder
       }
     }
 
