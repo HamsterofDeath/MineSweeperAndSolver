@@ -651,6 +651,7 @@ class HoDSolve2016 extends MineFinder {
     private val bombCounts                = Array.tabulate(width, height)((_, _) => UNKNOWN_STATE)
     private val remainingSurroundingBombs = Array.tabulate(width, height)((_, _) => 0)
     private val bombDetected              = Array.tabulate(width, height)((_, _) => false)
+    private val inTodoList                = Array.tabulate(width, height)((_, _) => false)
   }
 
 }
@@ -684,6 +685,12 @@ object Utils {
     }
   }
 
+}
+
+object HoDSolve2016 {
+  def main(args: Array[String]): Unit = {
+    println((for (x <- 1 to 25; y <- 1 to 25) yield Set(x, y)).toList.distinct.size)
+  }
 }
 
 
